@@ -1,9 +1,11 @@
-"""Python script for Exercise set 6 of the Unsupervised andggggggggggggg
+"""Python script for Exercise set 6 of the Unsupervised and
 Reinforcement Learning.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 import matplotlib.pylab as plb
+from matplotlib import animation
 
 def kohonen():
     """Example for using create_data, plot_data and som_step.
@@ -31,7 +33,7 @@ def kohonen():
 
     #set the width of the neighborhood via the width of the gaussian that
     #describes it
-    sigma = 2.0
+    sigma = 1
 
     #initialise the centers randomly
     centers = np.random.rand(size_k**2, dim) * data_range
@@ -40,29 +42,40 @@ def kohonen():
     neighbor = np.arange(size_k**2).reshape((size_k, size_k))
 
     #set the learning rate
-    eta = 0.9 # HERE YOU HAVE TO SET YOUR OWN LEARNING RATE
+    eta = 0.1 # HERE YOU HAVE TO SET YOUR OWN LEARNING RATE
 
     #set the maximal iteration count
-    tmax = 5000 # this might or might not work; use your own convergence criterion
+    tmax = 1*2000 # this might or might not work; use your own convergence criterion
 
     #set the random order in which the datapoints should be presented
     i_random = np.arange(tmax) % dy
     np.random.shuffle(i_random)
 
+    accumuls = []
+
     for t, i in enumerate(i_random):
-        som_step(centers, data[i,:],neighbor,eta,sigma)
+        accumuls.append(som_step(centers, data[i,:],neighbor,eta,sigma))
+
+    for j in range(size_k ** 2):
+        plb.subplot(size_k, size_k, j + 1)
+        plb.imshow(np.reshape(centers[j, :], [28, 28]), interpolation='nearest', cmap='Greys')
+        plb.axis('off')
+    plb.show()
+
+    plb.figure()
+    plb.plot(accumuls)
+    plb.show()
+
+
 
 
     # for visualization, you can use this:
-    for i in range(size_k**2):
-        plb.subplot(size_k,size_k,i+1)
 
-        plb.imshow(np.reshape(centers[i,:], [28, 28]),interpolation='bilinear', cmap='Greys')
-        plb.axis('off')
 
     # leave the window open at the end of the loop
-    plb.show()
-    plb.draw()
+
+
+    #plb.draw()
 
 
 
@@ -84,6 +97,7 @@ def som_step(centers,data,neighbor,eta,sigma):
                          Effectively describing the width of the neighborhood
     """
 
+    accumul = 0
     size_k = int(np.sqrt(len(centers)))
 
     #find the best matching unit via the minimal distance to the datapoint
@@ -99,7 +113,10 @@ def som_step(centers,data,neighbor,eta,sigma):
         # calculate the distance and discounting factor
         disc=gauss(np.sqrt((a-a1)**2+(b-b1)**2),[0, sigma])
         # update weights
-        centers[j,:] += disc * eta * (data - centers[j,:])
+        x = disc * eta * (data - centers[j,:])
+        accumul += x
+        centers[j,:] +=  x
+    return accumul
 
 
 def gauss(x,p):
