@@ -1,4 +1,4 @@
-"""Python script for Exercise set 6 of the Unsupervised and
+"""Python script for Exercise set 6 of the Unsupervised andggggggggggggg
 Reinforcement Learning.
 """
 
