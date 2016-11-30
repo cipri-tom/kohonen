@@ -42,19 +42,27 @@ def kohonen():
     neighbor = np.arange(size_k**2).reshape((size_k, size_k))
 
     #set the learning rate
-    eta = 0.1 # HERE YOU HAVE TO SET YOUR OWN LEARNING RATE
+    eta = 0.01 # HERE YOU HAVE TO SET YOUR OWN LEARNING RATE
 
     #set the maximal iteration count
-    tmax = 1*2000 # this might or might not work; use your own convergence criterion
+    tmax = 10*2000 # this might or might not work; use your own convergence criterion
 
     #set the random order in which the datapoints should be presented
     i_random = np.arange(tmax) % dy
     np.random.shuffle(i_random)
 
-    accumuls = []
+    accumuls = [[] for i in range(36)]
+    accumuls2 = [[] for i in range(36)]
 
     for t, i in enumerate(i_random):
-        accumuls.append(som_step(centers, data[i,:],neighbor,eta,sigma))
+        aa,bb = som_step(centers, data[i,:],neighbor,eta,sigma)
+        accumuls[bb] += [aa]
+        accumuls2[bb] += [t]
+    for j in range(size_k ** 2):
+        plb.figure()
+        plb.title(j)
+        plb.plot(accumuls2[j],np.convolve(accumuls[j],[1]*50)[:-49])
+        plb.show()
 
     for j in range(size_k ** 2):
         plb.subplot(size_k, size_k, j + 1)
@@ -62,9 +70,7 @@ def kohonen():
         plb.axis('off')
     plb.show()
 
-    plb.figure()
-    plb.plot(accumuls)
-    plb.show()
+
 
 
 
@@ -97,12 +103,12 @@ def som_step(centers,data,neighbor,eta,sigma):
                          Effectively describing the width of the neighborhood
     """
 
-    accumul = 0
     size_k = int(np.sqrt(len(centers)))
 
     #find the best matching unit via the minimal distance to the datapoint
     b = np.argmin(np.sum((centers - np.resize(data, (size_k**2, data.size)))**2,1))
-
+    bb = b
+    accumul = np.linalg.norm(eta * (data - centers[b, :]))
     # find coordinates of the winner
     a,b = np.nonzero(neighbor == b)
 
@@ -114,9 +120,10 @@ def som_step(centers,data,neighbor,eta,sigma):
         disc=gauss(np.sqrt((a-a1)**2+(b-b1)**2),[0, sigma])
         # update weights
         x = disc * eta * (data - centers[j,:])
-        accumul += x
+
         centers[j,:] +=  x
-    return accumul
+
+    return accumul,bb
 
 
 def gauss(x,p):
