@@ -5,64 +5,72 @@ Reinforcement Learning.
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.pylab as plb
-from matplotlib import animation
+import os.path as path
+import pickle as pkl
+
+def load_data(name='Bertrand Champenois'):
+    """ Loads the required digits for the given name. Also serialises them to
+    disk for faster future loading
+    Returns: (data, labels) -- data is only the subset of 4 selected digits
+    """
+    target_digits = name2digits(name) # assign the four digits that should be used
+    print('Your digits: ', target_digits)
+
+    # labels is small and fast, no need to serialise
+    labels = np.loadtxt('labels.txt')
+    target_idxs = np.logical_or.reduce([labels==x for x in target_digits])
+    labels = labels[target_idxs]   # filter our digits only
+
+
+    # data is big and takes time; check serialised version of subset
+    target_digits_path = name + '.pkl'
+    if path.isfile(target_digits_path):
+        print('Loading from binary...')
+        with open(target_digits_path, 'rb') as digits_file:
+            data = pkl.load(digits_file)
+    else:
+        print('Loading from text...')
+        data = np.loadtxt('data.txt')
+        data = data[target_idxs,:]  # filter our digits only
+
+        # serialise to disk:
+        with open(target_digits_path, 'wb') as digits_file:
+            pkl.dump(data, digits_file)
+            print('Target digits serialised to %s' % target_digits_path)
+
+    return data, labels, target_digits
 
 def kohonen():
     """Example for using create_data, plot_data and som_step.
     """
     plb.close('all')
+    data, labels = load_data()  # default name
 
-    dim = 28*28
+    # Kohonen algorithm hyper-parameters
+    size_k = 6       # size of the Kohonen map (size_k, size_k)
+    sigma  = 1       # width of the gaussian neighborhood
+    eta    = 0.1     # learning rate
+    tmax   = 5*2000  # max iteration count; substitutes convergence criterion
+
+    # initialise the centers randomly
+    dim = data.shape[1]     # 28*28 = 784
     data_range = 255.0
-
-    # load in data and labels
-    data = np.array(np.loadtxt('data.txt'))
-    labels = np.loadtxt('labels.txt')
-
-    # select 4 digits
-    name = 'Bertrand Champenois' # REPLACE BY YOUR OWN NAME
-    targetdigits = name2digits(name) # assign the four digits that should be used
-    print(targetdigits) # output the digits that were selected
-    # this selects all data vectors that corresponds to one of the four digits
-    data = data[np.logical_or.reduce([labels==x for x in targetdigits]),:]
-
-    dy, dx = data.shape
-
-    #set the size of the Kohonen map. In this case it will be 6 X 6
-    size_k = 6
-
-    #set the width of the neighborhood via the width of the gaussian that
-    #describes it
-    sigma = 1
-
-    #initialise the centers randomly
     centers = np.random.rand(size_k**2, dim) * data_range
 
-    #build a neighborhood matrix
+    # build a neighborhood matrix
     neighbor = np.arange(size_k**2).reshape((size_k, size_k))
 
-    #set the learning rate
-    eta = 0.01 # HERE YOU HAVE TO SET YOUR OWN LEARNING RATE
+    # set the random order in which the datapoints should be presented
+    idxs_random = np.arange(tmax) % data.shape[0]
+    np.random.shuffle(idxs_random)
 
-    #set the maximal iteration count
-    tmax = 10*2000 # this might or might not work; use your own convergence criterion
+    movs = [] # movements created at each step
 
-    #set the random order in which the datapoints should be presented
-    i_random = np.arange(tmax) % dy
-    np.random.shuffle(i_random)
-
-    accumuls = [[] for i in range(36)]
-    accumuls2 = [[] for i in range(36)]
-
-    for t, i in enumerate(i_random):
-        aa,bb = som_step(centers, data[i,:],neighbor,eta,sigma)
-        accumuls[bb] += [aa]
-        accumuls2[bb] += [t]
-    for j in range(size_k ** 2):
-        plb.figure()
-        plb.title(j)
-        plb.plot(accumuls2[j],np.convolve(accumuls[j],[1]*50)[:-49])
-        plb.show()
+    for example_idx in idxs_random:
+        mov, win = som_step(centers, data[example_idx,:],neighbor,eta,sigma)
+        movs.append(mov)
+    plb.plot(movs)
+    plb.show()
 
     for j in range(size_k ** 2):
         plb.subplot(size_k, size_k, j + 1)
@@ -71,66 +79,56 @@ def kohonen():
     plb.show()
 
 
-
-
-
-
-    # for visualization, you can use this:
-
-
-    # leave the window open at the end of the loop
-
-
-    #plb.draw()
-
-
-
 def som_step(centers,data,neighbor,eta,sigma):
-    """Performs one step of the sequential learning for a
-    self-organized map (SOM).
+    """ Performs one step of the sequential learning for a self-organized map (SOM).
 
-      centers = som_step(centers,data,neighbor,eta,sigma)
+        centers = som_step(centers,data,neighbor,eta,sigma)
 
-      Input and output arguments:
-       centers  (matrix) cluster centres. Have to be in format:
-                         center X dimension
-       data     (vector) the actually presented datapoint to be presented in
-                         this timestep
-       neighbor (matrix) the coordinates of the centers in the desired
-                         neighborhood.
-       eta      (scalar) a learning rate
-       sigma    (scalar) the width of the gaussian neighborhood function.
-                         Effectively describing the width of the neighborhood
+    Input and output arguments:
+        centers  (matrix) cluster centres. Have to be in format:
+                          center X dimension
+        data     (vector) the actual datapoint to be presented in this timestep
+        neighbor (matrix) the layout of the centers in the desired neighborhood
+        eta      (scalar) a learning rate
+        sigma    (scalar) the width of the gaussian neighborhood function.
+                          Effectively describing the width of the neighborhood
+
+    Return:      (tuple)
+        movement          total movement created by this `data` normalised by map size
+        winner            the center closest to this data point
     """
 
     size_k = int(np.sqrt(len(centers)))
 
-    #find the best matching unit via the minimal distance to the datapoint
-    b = np.argmin(np.sum((centers - np.resize(data, (size_k**2, data.size)))**2,1))
-    bb = b
-    accumul = np.linalg.norm(eta * (data - centers[b, :]))
-    # find coordinates of the winner
-    a,b = np.nonzero(neighbor == b)
+    # find the best matching unit via the minimal distance to the datapoint
+    winner = np.argmin(np.sum(centers - data, axis=1)**2) # resize was useless due to broadcasting
+    win_x, win_y = np.nonzero(neighbor == winner)
+
+    # total movement produced by this example
+    movement = 0
 
     # update all units
-    for j in range(size_k**2):
+    for c in range(size_k**2):
         # find coordinates of this unit
-        a1,b1 = np.nonzero(neighbor==j)
+        c_x, c_y = np.nonzero(neighbor==c)
+
         # calculate the distance and discounting factor
-        disc=gauss(np.sqrt((a-a1)**2+(b-b1)**2),[0, sigma])
-        # update weights
-        x = disc * eta * (data - centers[j,:])
+        dist = np.sqrt((win_x-c_x)**2 + (win_y-c_y)**2)
+        disc = gauss(dist, 0,sigma)
 
-        centers[j,:] +=  x
+        # update weights and accumulate movement
+        c_movement    = disc * eta * (data - centers[c,:])
+        centers[c,:] += c_movement
+        movement     += np.linalg.norm(c_movement)
 
-    return accumul,bb
+    return movement / (size_k**2), winner
 
 
-def gauss(x,p):
-    """Return the gauss function N(x), with mean p[0] and std p[1].
-    Normalized such that N(x=p[0]) = 1.
+def gauss(x,m,s):
+    """Return the gauss function N(x), with mean m and std s.
+    Normalized such that N(x=m) = 1.
     """
-    return np.exp((-(x - p[0])**2) / (2 * p[1]**2))
+    return np.exp((-(x - m)**2) / (2 * s*s))
 
 def name2digits(name):
     """ takes a string NAME and converts it into a pseudo-random selection of 4
@@ -158,7 +156,7 @@ def name2digits(name):
     import scipy.io.matlab
     Data = scipy.io.matlab.loadmat('hash.mat',struct_as_record=True)
     x = Data['x']
-    t = np.mod(s,x.shape[0])
+    t = int(np.mod(s,x.shape[0]))
 
     return np.sort(x[t,:])
 
