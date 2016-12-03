@@ -101,7 +101,8 @@ def som_step(centers,data,neighbor,eta,sigma):
     size_k = int(np.sqrt(len(centers)))
 
     # find the best matching unit via the minimal distance to the datapoint
-    winner = np.argmin(np.sum(centers - data, axis=1)**2) # resize was useless due to broadcasting
+    #winner = np.argmin(np.sum(centers - data, axis=1)**2) # resize was useless due to broadcasting
+    winner = np.argmin(np.sum((centers - data)**2, axis=1))
     win_x, win_y = np.nonzero(neighbor == winner)
 
     # total movement produced by this example
