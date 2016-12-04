@@ -60,6 +60,53 @@ def de_standardize(data, mean, std):
     """ Takes standardized data and shifts it by mean with std"""
     return data * std + mean
 
+
+def score(centers, data):
+    """ Computes how well the centers fit the data """
+    s = 0
+    for example in data:
+        s += np.min(np.sum((centers - example)**2, axis=1)) / data.shape[1]  # normalise by num_features
+    return s / data.shape[0]  # normalise by num_examples
+
+
+
+def build_and_train(data, size=6, eta=0.1, sigma=3, tmax=4000, epoch=50, seed=None,):
+    """ Initializes and trains a SOM with the given parameters
+
+        size    (int)    size of map side -> map is (size x size) neurons
+        eta     (float)  learning rate -- in (0, 1)
+        sigma   (int)    width of gaussian neighbourhood
+        tmax    (int)    how many random indices to build
+        epoch   (int)    size of epoch when scores are computed
+        seed             passed to numpy.random for reproducibility
+
+        Returns: (centers, scores)
+    """
+    # initialise the centers randomly
+    np.random.seed(seed)
+    data_range = 255.0
+    centers = np.random.rand(size**2, data.shape[1]) * data_range
+
+    neighbor = np.arange(size**2).reshape((size, size))
+
+    # set the random order in which the datapoints should be presented
+    idxs_random = np.arange(tmax) % data.shape[0]
+    np.random.shuffle(idxs_random)
+
+    # train
+    scores = []
+    for step, idx in enumerate(idxs_random):
+        som_step(centers, data[idx,:],neighbor,eta,sigma)
+        if step %  epoch == 0:
+            scores.append(score(centers, data))
+        perc = step*100 / tmax
+        if perc % 10 == 0:
+            print(perc, end='%, ')
+    print("100%")
+
+    return centers, scores
+
+
 def kohonen():
     """Example for using create_data, plot_data and som_step.
     """
