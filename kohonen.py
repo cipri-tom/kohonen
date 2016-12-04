@@ -11,7 +11,7 @@ import pickle as pkl
 def load_data(name='Bertrand Champenois'):
     """ Loads the required digits for the given name. Also serialises them to
     disk for faster future loading
-    Returns: (data, labels) -- data is only the subset of 4 selected digits
+    Returns: (data, labels, target_digits) -- data is only the subset of 4 selected digits
     """
     target_digits = name2digits(name) # assign the four digits that should be used
     print('Your digits: ', target_digits)
@@ -39,6 +39,26 @@ def load_data(name='Bertrand Champenois'):
             print('Target digits serialised to %s' % target_digits_path)
 
     return data, labels, target_digits
+
+def standardize(data, mean=None, std=None):
+    """ Standardizes the data to have 0 mean and unit variance for each feature.
+        If not given, these values are calculated from the data.
+        Otherwise, then they are applied directly (as for testing data)
+
+        Returns: data_transformed, mean, std
+    """
+    if mean is None:
+        mean = np.mean(data, axis=0)
+    data = data - mean
+    if std is None:
+        std = np.std(data, axis=0)
+    data[:, std > 0] = data[:, std > 0] / std[std > 0]  # avoid / 0
+
+    return data, mean, std
+
+def de_standardize(data, mean, std):
+    """ Takes standardized data and shifts it by mean with std"""
+    return data * std + mean
 
 def kohonen():
     """Example for using create_data, plot_data and som_step.
@@ -101,7 +121,6 @@ def som_step(centers,data,neighbor,eta,sigma):
     size_k = int(np.sqrt(len(centers)))
 
     # find the best matching unit via the minimal distance to the datapoint
-    #winner = np.argmin(np.sum(centers - data, axis=1)**2) # resize was useless due to broadcasting
     winner = np.argmin(np.sum((centers - data)**2, axis=1))
     win_x, win_y = np.nonzero(neighbor == winner)
 
@@ -118,8 +137,8 @@ def som_step(centers,data,neighbor,eta,sigma):
         disc = gauss(dist, 0,sigma)
 
         # update weights and accumulate movement
-        c_movement    = disc * eta * (data - centers[c,:])
-        centers[c,:] += c_movement
+        c_movement    = disc * (data - centers[c,:])
+        centers[c,:] += eta * c_movement
         movement     += np.linalg.norm(c_movement)
 
     return movement / (size_k**2), winner
